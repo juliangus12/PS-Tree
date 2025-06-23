@@ -17,7 +17,6 @@ requirements = [
     'scipy',
     'deap',
     'bluepyopt',
-    'glmnet',
     'icecream',
     'scikit-learn',
 ]

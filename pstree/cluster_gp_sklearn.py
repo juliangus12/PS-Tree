@@ -12,7 +12,6 @@ from deap.algorithms import varAnd
 from deap.base import Fitness
 from deap.gp import Terminal, MetaEphemeral
 from deap.tools import selNSGA2, selRandom, selSPEA2, selLexicase, selNSGA3
-from glmnet import ElasticNet
 from icecream import ic
 from scipy.stats import pearsonr
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
@@ -489,17 +488,15 @@ class GPRegressor(NormalizationRegressor):
 
             def get_lasso():
                 alphas = _alpha_grid(features, Y_true)
-                ridge_model = ElasticNet(
-                    alpha=1, lambda_path=alphas, n_splits=5, tol=1e-4, random_state=0
-                )
+                ridge_model = ElasticNetCV(l1_ratio=1.0, alphas=alphas, cv=5, tol=1e-4, random_state=0)
                 return ridge_model
 
             def get_elastic_net(ratio):
                 alphas = _alpha_grid(features, Y_true, l1_ratio=ratio)
-                ridge_model = ElasticNet(
-                    alpha=ratio,
-                    lambda_path=alphas,
-                    n_splits=5,
+                ridge_model = ElasticNetCV(
+                    l1_ratio=ratio,
+                    alphas=alphas,
+                    cv=5,
                     tol=1e-4,
                     random_state=0,
                 )
@@ -565,12 +562,12 @@ class GPRegressor(NormalizationRegressor):
                         score += abs(len(Y_true) * ridge.best_score_)
                     else:
                         score += abs(np.sum(self.category[:, i]) * ridge.best_score_)
-                elif isinstance(ridge, ElasticNet):
+                elif isinstance(ridge, ElasticNetCV):
                     if len(self.category.shape) == 1:
-                        score += -1 * abs(len(Y_true) * np.max(ridge.cv_mean_score_))
+                        score += abs(len(Y_true) * np.min(np.sum(ridge.mse_path_, axis=1)))
                     else:
-                        score += -1 * abs(
-                            np.sum(self.category[:, i]) * np.max(ridge.cv_mean_score_)
+                        score += abs(
+                            np.sum(self.category[:, i]) * np.min(np.sum(ridge.mse_path_, axis=1))
                         )
                 elif isinstance(ridge, LassoCV):
                     score += abs(len(Y_true) * np.min(np.sum(ridge.mse_path_, axis=1)))
@@ -582,8 +579,8 @@ class GPRegressor(NormalizationRegressor):
                     score += 0
                 else:
                     raise Exception
-                if isinstance(ridge, ElasticNet):
-                    feature_importances = np.mean(np.abs(ridge.coef_path_), axis=1)
+                if isinstance(ridge, ElasticNetCV):
+                    feature_importances = np.abs(ridge.coef_)
                 else:
                     feature_importances = np.abs(ridge.coef_)
             else:
